@@ -1,7 +1,13 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 #include <iostream>
+
+#include "ControllerState.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 	glViewport(0, 0, width, height);
@@ -16,8 +22,9 @@ void processInput(GLFWwindow* window) {
 const char* vertexShaderSource =
 "#version 330 core\n"
 "layout(location=0) in vec3 vertexPosition;\n"
+"uniform mat4 model, view, projection;"
 "void main(){\n"
-"	gl_Position = vec4(vertexPosition, 1.0);\n"
+"	gl_Position = projection*view*model*vec4(vertexPosition, 1.0);\n"
 "}\0";
 
 const char* fragmentShaderSource =
@@ -90,15 +97,69 @@ int main() {
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
 
+	ControllerState controllerState(0.0,0.0,0.0,0.0);
+	ControllerState* state = NULL;
+
+	int joystickPresent = glfwJoystickPresent(GLFW_JOYSTICK_1);
+
+	int axesCnt;
+	const float* axes;
+
+	if (joystickPresent) {
+		axesCnt;
+		axes = glfwGetJoystickAxes(GLFW_JOYSTICK_1, &axesCnt);
+		controllerState.setInitialAxesValues(axes[0], axes[1], axes[2], axes[3]);
+		state = &controllerState;
+	}
+	else std::cout << "JOYSTICK NOT PRESENT, USING MOUSE." << std::endl;
+
+	float rotateX = 0.0f, rotateY = 0.0, rotateSpeed=1.0, lastX=0.0, lastY=0.0;
+	bool rotate = false;
+
 	while (!glfwWindowShouldClose(window)) {
 
 		processInput(window);
 
+		if (state) {
+			axes = glfwGetJoystickAxes(GLFW_JOYSTICK_1, &axesCnt);
+			if (state->modelShouldRotate(axes[0], axes[1], axes[2], axes[3])) {
+				rotateX = axes[2];
+				rotateY = axes[3];
+				rotate = true;
+			}
+			else rotate = false;
+		}
+
 		glClearColor(0.878, 0.341, 0.314, 1.0);
-		glClear(GL_COLOR_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		glUseProgram(shaderProgram);
 		glBindVertexArray(VAO);
+
+		glm::mat4 model(1.0f), view(1.0f), perspective(1.0f);
+		model = glm::translate(model, glm::vec3(0.0));
+
+		if (rotate) {
+			lastX = rotateSpeed * rotateX * glfwGetTime();
+			lastY = rotateSpeed * rotateY * glfwGetTime();
+		}
+
+		model = glm::rotate(model, lastX, glm::vec3(0.0f, 1.0f, 0.0f));
+		model = glm::rotate(model, lastY, glm::vec3(1.0f, 0.0f, 0.0f));
+
+		view = glm::lookAt(glm::vec3(0.0, 0.0, -5.0), glm::vec3(0.0), glm::vec3(0.0, 1.0, 0.0));
+
+		perspective = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+
+		unsigned int loc = glGetUniformLocation(shaderProgram, "model");
+		glUniformMatrix4fv(loc, 1,GL_FALSE, glm::value_ptr(model));
+
+		loc = glGetUniformLocation(shaderProgram, "view");
+		glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(view));
+
+		loc = glGetUniformLocation(shaderProgram, "projection");
+		glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(perspective));
+
 
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 
