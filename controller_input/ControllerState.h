@@ -28,5 +28,6 @@ public:
 	ControllerState(float lx, float ly, float rx, float ry) :lx(lx), ly(ly), rx(rx), ry(ry) {};
 
 	void setInitialAxesValues(float, float, float ,float);
-	bool modelShouldRotate(float, float, float, float);
+	bool leftAxesChanged(float, float);
+	bool rightAxesChanged(float, float);
 };

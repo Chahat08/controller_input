@@ -8,6 +8,7 @@
 #include <iostream>
 
 #include "ControllerState.h"
+#include "Camera.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 	glViewport(0, 0, width, height);
@@ -102,33 +103,69 @@ int main() {
 
 	int joystickPresent = glfwJoystickPresent(GLFW_JOYSTICK_1);
 
-	int axesCnt;
+	int axesCnt, buttonsCnt;
 	const float* axes;
+	const unsigned char* buttons;
 
 	if (joystickPresent) {
-		axesCnt;
 		axes = glfwGetJoystickAxes(GLFW_JOYSTICK_1, &axesCnt);
 		controllerState.setInitialAxesValues(axes[0], axes[1], axes[2], axes[3]);
+		buttons = glfwGetJoystickButtons(GLFW_JOYSTICK_1, &buttonsCnt);
 		state = &controllerState;
 	}
 	else std::cout << "JOYSTICK NOT PRESENT, USING MOUSE." << std::endl;
 
-	float rotateX = 0.0f, rotateY = 0.0, rotateSpeed=1.0, lastX=0.0, lastY=0.0;
-	bool rotate = false;
+
+	Camera camera;
+
+	float rotateX = 0.0f, rotateY = 0.0f, rotateSpeed = 0.1f; // rotation parameters
+	float translateX = 0.0f, translateZ = 0.0f, moveSpeed = 0.005f;
+	float pitch = 0.0f, yaw = 90.0f, sensitivity = 0.01f;
 
 	while (!glfwWindowShouldClose(window)) {
 
 		processInput(window);
 
 		if (state) {
+			buttons = glfwGetJoystickButtons(GLFW_JOYSTICK_1, &buttonsCnt);
+			
+			// rotation
+			if (buttons[10] == GLFW_PRESS) // up
+				rotateX += 1.0f;
+			if (buttons[11] == GLFW_PRESS)// right
+				rotateY += 1.0f;
+			if (buttons[12] == GLFW_PRESS) // down
+				rotateX -= 1.0f;
+			if (buttons[13] == GLFW_PRESS) //left
+				rotateY -= 1.0f;
+
+			// camera position
 			axes = glfwGetJoystickAxes(GLFW_JOYSTICK_1, &axesCnt);
-			if (state->modelShouldRotate(axes[0], axes[1], axes[2], axes[3])) {
-				rotateX = axes[2];
-				rotateY = axes[3];
-				rotate = true;
+			if (state->leftAxesChanged(axes[0], axes[1])) {
+				camera.position += (axes[0] * moveSpeed) * glm::normalize(glm::cross(camera.target, camera.up));
+				camera.position += (axes[1] * moveSpeed) * camera.targetDirection;
 			}
-			else rotate = false;
+			if (state->rightAxesChanged(axes[2], axes[3])) {
+				
+				yaw += axes[2]*sensitivity;
+				pitch += axes[3]*sensitivity;
+
+				glm::vec3 direction;
+				direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+				direction.y = sin(glm::radians(pitch));
+				direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+				camera.target = glm::normalize(direction);
+				camera.targetDirection = camera.target;
+
+				camera.rightDirection = glm::normalize(glm::cross(camera.target, camera.worldUp));
+				camera.up = glm::normalize(glm::cross(camera.rightDirection, camera.targetDirection));
+			}
 		}
+
+		// r changes look at, x-> 360 degrees, y-> 180 degrees
+
+
+		// l changes position
 
 		glClearColor(0.878, 0.341, 0.314, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -139,15 +176,11 @@ int main() {
 		glm::mat4 model(1.0f), view(1.0f), perspective(1.0f);
 		model = glm::translate(model, glm::vec3(0.0));
 
-		if (rotate) {
-			lastX = rotateSpeed * rotateX * glfwGetTime();
-			lastY = rotateSpeed * rotateY * glfwGetTime();
-		}
-
-		model = glm::rotate(model, lastX, glm::vec3(0.0f, 1.0f, 0.0f));
-		model = glm::rotate(model, lastY, glm::vec3(1.0f, 0.0f, 0.0f));
-
-		view = glm::lookAt(glm::vec3(0.0, 0.0, -5.0), glm::vec3(0.0), glm::vec3(0.0, 1.0, 0.0));
+		model = glm::rotate(model, glm::radians(rotateX*rotateSpeed), glm::vec3(1.0f, 0.0f, 0.0f));
+		model = glm::rotate(model, glm::radians(rotateY*rotateSpeed), glm::vec3(0.0f, 1.0f, 0.0f));
+		
+		
+		view = camera.getLookAt();//glm::lookAt(glm::vec3(0.0,0.0,3.0), glm::vec3(0.0,0.0,-1.0)+ glm::vec3(0.0, 0.0, 3.0), glm::vec3(0.0,1.0,0.0));//camera.getLookAt();
 
 		perspective = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
 

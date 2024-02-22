@@ -19,18 +19,26 @@ void ControllerState::setInitialAxesValues(float lx, float ly, float rx, float r
 	rangeRYMax = init_rx + precision;
 }
 
-bool ControllerState::modelShouldRotate(float lx, float ly, float rx, float ry) {
-	bool rotate = false;
+bool ControllerState::leftAxesChanged(float lx, float ly) {
+	bool changed = false;
 
-	if (/*lx <= rangeLXMin || lx >= rangeLXMax ||
-		ly <= rangeLYMin || ly >= rangeLYMax ||*/
-		rx <= rangeRXMin || rx >= rangeRXMax ||
-		ry <= rangeRYMin || ry >= rangeRYMax) rotate = true;
+	if (lx <= rangeLXMin || lx >= rangeLXMax ||
+		ly <= rangeLYMin || ly >= rangeLYMax ) changed = true;
 		
 	this->lx = lx;
 	this->ly = ly;
+
+	return changed;
+}
+
+bool ControllerState::rightAxesChanged(float rx, float ry) {
+	bool changed = false;
+
+	if (rx <= rangeRXMin || rx >= rangeRXMax ||
+		ry <= rangeRYMin || ry >= rangeRYMax) changed = true;
+
 	this->rx = rx;
 	this->ry = ry;
 
-	return rotate;
+	return changed;
 }
