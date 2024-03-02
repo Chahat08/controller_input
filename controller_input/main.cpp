@@ -10,6 +10,42 @@
 #include "ControllerState.h"
 #include "Camera.h"
 
+#include "vrpn/vrpn_Analog.h"
+#include "vrpn/vrpn_Button.h"
+
+float lx = 0.0f, ly = 0.0f, rx = 0.0f, ry = 0.0f;
+bool b10 = false, b11 = false, b12 = false, b13 = false;
+
+void VRPN_CALLBACK handle_analog(void* userData, const vrpn_ANALOGCB a)
+
+{
+	/*int nbChannels = a.num_channel;
+	std::cout << "Analog : ";
+	for (int i = 0; i < a.num_channel; i++)
+	{
+		std::cout << a.channel[i] << " ";
+
+	}
+
+	std::cout << std::endl;*/
+	lx = a.channel[0];
+	ly = a.channel[1];
+	rx = a.channel[2];
+	ry = a.channel[3];
+
+}
+
+void VRPN_CALLBACK handle_button(void* userData, const vrpn_BUTTONCB b)
+
+{
+
+	//std::cout << "Button '" << b.button << "': " << b.state << std::endl;
+	if (b.button == 10) b10 = b.state;
+	if (b.button == 11) b11 = b.state;
+	if (b.button == 12) b12 = b.state;
+	if (b.button == 13) b13 = b.state;
+}
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 	glViewport(0, 0, width, height);
 }
@@ -115,12 +151,18 @@ int main() {
 	}
 	else std::cout << "JOYSTICK NOT PRESENT, USING MOUSE." << std::endl;
 
-
 	Camera camera;
 
 	float rotateX = 0.0f, rotateY = 0.0f, rotateSpeed = 0.1f; // rotation parameters
 	float translateX = 0.0f, translateZ = 0.0f, moveSpeed = 0.005f;
-	float pitch = 0.0f, yaw = 90.0f, sensitivity = 0.01f;
+	float pitch = 0.0f, yaw = 90.0f, sensitivity = 0.5f;
+	bool chagned = false;
+
+	vrpn_Analog_Remote* vrpnAnalog = new vrpn_Analog_Remote("device0@localhost");
+	vrpn_Button_Remote* vrpnButton = new vrpn_Button_Remote("device0@localhost");
+
+	vrpnAnalog->register_change_handler(0, handle_analog);
+	vrpnButton->register_change_handler(0, handle_button);
 
 	while (!glfwWindowShouldClose(window)) {
 
@@ -130,25 +172,46 @@ int main() {
 			buttons = glfwGetJoystickButtons(GLFW_JOYSTICK_1, &buttonsCnt);
 			
 			// rotation
-			if (buttons[10] == GLFW_PRESS) // up
+			//if (buttons[10] == GLFW_PRESS) // up
+			//	rotateX += 1.0f;
+			//if (buttons[11] == GLFW_PRESS)// right
+			//	rotateY += 1.0f;
+			//if (buttons[12] == GLFW_PRESS) // down
+			//	rotateX -= 1.0f;
+			//if (buttons[13] == GLFW_PRESS) //left
+			//	rotateY -= 1.0f;
+
+			if (b10) // up
 				rotateX += 1.0f;
-			if (buttons[11] == GLFW_PRESS)// right
+			if (b11)// right
 				rotateY += 1.0f;
-			if (buttons[12] == GLFW_PRESS) // down
+			if (b12) // down
 				rotateX -= 1.0f;
-			if (buttons[13] == GLFW_PRESS) //left
+			if (b13) //left
 				rotateY -= 1.0f;
+			
 
 			// camera position
 			axes = glfwGetJoystickAxes(GLFW_JOYSTICK_1, &axesCnt);
 			if (state->leftAxesChanged(axes[0], axes[1])) {
-				camera.position += (axes[0] * moveSpeed) * glm::normalize(glm::cross(camera.target, camera.up));
-				camera.position += (axes[1] * moveSpeed) * camera.targetDirection;
+				if (!chagned) {
+					camera.position += (ly * moveSpeed) * camera.targetDirection;
+					camera.position += (lx * moveSpeed) * glm::normalize(glm::cross(camera.target, camera.up));
+				}
+					//camera.position += (axes[1] * moveSpeed) * camera.targetDirection;
+				else {
+					camera.position -= (lx * moveSpeed) * glm::normalize(glm::cross(camera.target, camera.up));
+					camera.position -= (ly * moveSpeed) * camera.targetDirection;
+				}
+				
 			}
 			if (state->rightAxesChanged(axes[2], axes[3])) {
-				
-				yaw += axes[2]*sensitivity;
-				pitch += axes[3]*sensitivity;
+				chagned = true;
+				/*yaw += axes[2]*sensitivity;
+				pitch += axes[3]*sensitivity;*/
+
+				yaw += rx * sensitivity;
+				pitch += ry * sensitivity;
 
 				glm::vec3 direction;
 				direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
@@ -160,12 +223,11 @@ int main() {
 				camera.rightDirection = glm::normalize(glm::cross(camera.target, camera.worldUp));
 				camera.up = glm::normalize(glm::cross(camera.rightDirection, camera.targetDirection));
 			}
+
 		}
 
-		// r changes look at, x-> 360 degrees, y-> 180 degrees
-
-
-		// l changes position
+		vrpnAnalog->mainloop();
+		vrpnButton->mainloop();
 
 		glClearColor(0.878, 0.341, 0.314, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
